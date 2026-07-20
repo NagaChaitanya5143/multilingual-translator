@@ -28,6 +28,7 @@ from deep_translator import GoogleTranslator
 from gtts import gTTS
 import speech_recognition as sr
 from pydub import AudioSegment
+import google.generativeai as genai
 
 # Supported Languages configurations
 LANGUAGES = {
@@ -137,6 +138,61 @@ def voice_to_voice(audio_path, source_lang, target_lang):
     
     return transcription, translation, audio_output
 
+def ask_gemini_ai(api_key, text_query, voice_query, input_mode, communication_lang):
+    """Queries Gemini AI, gets response in selected language, and generates speech audio."""
+    # 1. Determine which API key to use
+    effective_key = api_key.strip() if api_key else os.environ.get("GEMINI_API_KEY")
+    if not effective_key:
+        return (
+            "API Key missing",
+            "Please configure your Gemini API Key in the field above or set it as a GEMINI_API_KEY environment variable. Get a free key at https://aistudio.google.com/",
+            None
+        )
+    
+    # 2. Get User Prompt
+    transcription = ""
+    if input_mode == "Voice Input":
+        if not voice_query:
+            return "No audio recorded", "Please record your voice first by clicking on the microphone.", None
+        transcription = speech_to_text(voice_query, communication_lang)
+        if (transcription.startswith("Error") or 
+            "unintelligible" in transcription.lower() or 
+            "could not request" in transcription.lower()):
+            return transcription, "Transcription failed. Could not ask AI.", None
+        prompt = transcription
+    else:
+        if not text_query or not text_query.strip():
+            return "", "Please type a question first.", None
+        prompt = text_query
+        transcription = prompt
+
+    # 3. Query Gemini
+    try:
+        genai.configure(api_key=effective_key)
+        
+        # System instructions to enforce language constraints
+        system_instruction = (
+            f"You are a helpful AI assistant. The user is communicating in {communication_lang}. "
+            f"You MUST answer their question directly, accurately, and ONLY in {communication_lang}. "
+            f"Do not translate your response to English or any other language unless explicitly requested. "
+            f"Keep your answers concise, clear, and natural."
+        )
+        
+        model = genai.GenerativeModel(
+            model_name="gemini-1.5-flash",
+            system_instruction=system_instruction
+        )
+        
+        response = model.generate_content(prompt)
+        ai_response_text = response.text.strip()
+    except Exception as e:
+        return transcription, f"Gemini API Error: {str(e)}", None
+
+    # 4. Convert AI response text to speech
+    audio_output = text_to_speech(ai_response_text, communication_lang)
+    
+    return transcription, ai_response_text, audio_output
+
 # Gradio Interface Styling
 theme = gr.themes.Soft(
     primary_hue="indigo",
@@ -171,8 +227,8 @@ css = """
 with gr.Blocks() as demo:
     gr.HTML("""
         <div class="title-container">
-            <h1>🌐 PolyGlot Voice & Text Translator</h1>
-            <p>Speak or type to translate instantly between English, Telugu (తెలుగు), Tamil (தமிழ்), Spanish (Español), and French (Français)</p>
+            <h1>🌐 PolyGlot Voice & Text AI Translator</h1>
+            <p>Translate languages & ask AI questions instantly in English, Telugu (తెలుగు), Tamil (தமிழ்), Spanish (Español), and French (Français)</p>
         </div>
     """)
     
@@ -280,6 +336,90 @@ with gr.Blocks() as demo:
                 fn=clear_voice_fields,
                 inputs=[],
                 outputs=[input_voice, transcribed_text, output_translated_voice, output_audio_voice]
+            )
+
+        # Tab 3: AI Assistant (Question answering in selected language)
+        with gr.Tab("🤖 AI Assistant"):
+            gr.Markdown("### Ask Gemini AI anything by typing or speaking in your preferred language and get answers read back to you!")
+            
+            with gr.Row():
+                with gr.Column(scale=1):
+                    api_key_input = gr.Textbox(
+                        label="Gemini API Key (Leave blank if already set in system environment variables)",
+                        placeholder="Paste your Gemini API key (AIzaSy...) here...",
+                        type="password"
+                    )
+                    ai_lang = gr.Dropdown(
+                        choices=list(LANGUAGES.keys()),
+                        value="English",
+                        label="Communication Language (Speak/Type and Receive answers in this language)"
+                    )
+                    ai_input_mode = gr.Radio(
+                        choices=["Text Input", "Voice Input"],
+                        value="Text Input",
+                        label="Choose Input Mode"
+                    )
+                    
+                    text_input_group = gr.Textbox(
+                        lines=4,
+                        placeholder="Type your question here...",
+                        label="Type Your Question",
+                        visible=True
+                    )
+                    
+                    voice_input_group = gr.Audio(
+                        sources=["microphone"],
+                        type="filepath",
+                        label="Record Your Question (Click mic to record, stop when done)",
+                        visible=False
+                    )
+                
+                with gr.Column(scale=1):
+                    ai_transcription_output = gr.Textbox(
+                        label="Transcribed Question (Detected from Voice)",
+                        interactive=False
+                    )
+                    ai_text_output = gr.Textbox(
+                        lines=6,
+                        label="AI Response Text",
+                        interactive=False
+                    )
+                    ai_audio_output = gr.Audio(
+                        label="Listen to AI Response Voice",
+                        type="filepath",
+                        interactive=False
+                    )
+            
+            with gr.Row():
+                btn_ask_ai = gr.Button("Ask AI", variant="primary", size="lg")
+                btn_clear_ai = gr.Button("Clear All", size="lg")
+                
+            # Manage toggle visibility between text input and voice input
+            def toggle_input_visibility(mode):
+                if mode == "Text Input":
+                    return gr.update(visible=True), gr.update(visible=False)
+                else:
+                    return gr.update(visible=False), gr.update(visible=True)
+            
+            ai_input_mode.change(
+                fn=toggle_input_visibility,
+                inputs=[ai_input_mode],
+                outputs=[text_input_group, voice_input_group]
+            )
+            
+            btn_ask_ai.click(
+                fn=ask_gemini_ai,
+                inputs=[api_key_input, text_input_group, voice_input_group, ai_input_mode, ai_lang],
+                outputs=[ai_transcription_output, ai_text_output, ai_audio_output]
+            )
+            
+            def clear_ai_fields():
+                return "", None, "", "", None
+                
+            btn_clear_ai.click(
+                fn=clear_ai_fields,
+                inputs=[],
+                outputs=[text_input_group, voice_input_group, ai_transcription_output, ai_text_output, ai_audio_output]
             )
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
-# PolyGlot: Voice & Text Translator
+# PolyGlot: Voice & Text AI Translator
 
-A modern, responsive, and beautiful translator application built in Python using **Gradio**, supporting both **text-to-text** and **voice-to-voice** translation.
+A modern, responsive, and beautiful translator application built in Python using **Gradio**, supporting **text-to-text** translation, **voice-to-voice** translation, and an **AI Assistant** capable of answering questions in English, Telugu, Tamil, Spanish, or French.
 
 ## Supported Languages
 - 🇬🇧 English (`en`)
@@ -14,7 +14,8 @@ A modern, responsive, and beautiful translator application built in Python using
 ## Features
 1. **Text Translator**: Translate written text between any of the supported languages, with automatic pronunciation generation.
 2. **Voice Translator**: Record your voice through your browser, transcribe it, translate it, and hear the translation spoken back in the target language.
-3. **Responsive Web UI**: A beautiful dark/light soft-indigo theme, designed for ease of use.
+3. **🤖 AI Assistant**: Speak or type a question to Gemini AI in your language (e.g., Telugu, Spanish) and get a direct, natural response spoken back to you in the same language.
+4. **Responsive Web UI**: A beautiful dark/light soft-indigo theme, designed for ease of use.
 
 ---
 
@@ -32,7 +33,13 @@ pip install -r requirements.txt
 > [!NOTE]
 > Since we use Gradio, all browser-based microphone recordings are handled cleanly. You do **not** need to install complex local audio system dependencies like `PyAudio`.
 
-### 2. Run the Application
+### 2. Configure Gemini API Key
+To use the **AI Assistant** tab:
+- Obtain a free Gemini API key from [Google AI Studio](https://aistudio.google.com/).
+- Either paste it into the **Gemini API Key** field directly in the application web interface, OR
+- Set it as a system environment variable named `GEMINI_API_KEY`.
+
+### 3. Run the Application
 Start the application by running:
 ```bash
 python app.py
