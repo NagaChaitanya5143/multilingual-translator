@@ -1,5 +1,28 @@
 import os
+import sys
+import io
+import ssl
 import tempfile
+import warnings
+import requests
+from urllib3.exceptions import InsecureRequestWarning
+
+# Reconfigure stdout/stderr on Windows to support UTF-8 console output for Tamil/Telugu/Spanish
+if sys.platform.startswith('win'):
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
+# Globally disable SSL certificate verification to handle corporate firewalls/proxies
+warnings.simplefilter('ignore', InsecureRequestWarning)
+
+original_request = requests.Session.request
+def patched_request(self, method, url, **kwargs):
+    kwargs['verify'] = False
+    return original_request(self, method, url, **kwargs)
+requests.Session.request = patched_request
+
+ssl._create_default_https_context = ssl._create_unverified_context
+
 import gradio as gr
 from deep_translator import GoogleTranslator
 from gtts import gTTS
@@ -145,7 +168,7 @@ css = """
 }
 """
 
-with gr.Blocks(theme=theme, css=css) as demo:
+with gr.Blocks() as demo:
     gr.HTML("""
         <div class="title-container">
             <h1>🌐 PolyGlot Voice & Text Translator</h1>
@@ -261,4 +284,4 @@ with gr.Blocks(theme=theme, css=css) as demo:
 
 if __name__ == "__main__":
     # Launch Gradio server
-    demo.launch(server_name="127.0.0.1", server_port=7860, share=False)
+    demo.launch(server_name="127.0.0.1", server_port=7860, share=False, theme=theme, css=css)
